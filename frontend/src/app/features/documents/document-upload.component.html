@@ -1,0 +1,16 @@
+<div class="card upload-card">
+  <h2>Subir documento</h2>
+  <p>Formatos soportados: DOCX, XLSX y PPTX.</p>
+
+  <div class="field">
+    <label for="file">Archivo</label>
+    <input id="file" type="file" accept=".docx,.xlsx,.pptx" (change)="onFileSelected($event)" />
+  </div>
+
+  <button class="btn btn-primary" [disabled]="uploading" (click)="upload()">
+    {{ uploading ? 'Subiendo...' : 'Subir archivo' }}
+  </button>
+
+  <p *ngIf="message">{{ message }}</p>
+  <p class="error-text" *ngIf="errorMessage">{{ errorMessage }}</p>
+</div>

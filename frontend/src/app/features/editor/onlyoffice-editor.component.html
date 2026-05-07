@@ -1,0 +1,12 @@
+<section class="editor-page container">
+  <div class="editor-toolbar">
+    <a routerLink="/documents" style="width: 100%;height: 100%;" class="btn btn-secondary">Volver a documentos</a>
+  </div>
+
+  <p *ngIf="loading">Cargando editor ONLYOFFICE...</p>
+  <p class="error-text" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <div class="editor-frame card" [class.editor-frame-hidden]="!!errorMessage">
+    <div #editorHost class="editor-host"></div>
+  </div>
+</section>

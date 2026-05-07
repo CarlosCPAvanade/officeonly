@@ -1,0 +1,13 @@
+<header class="topbar" *ngIf="authService.isAuthenticated()">
+  <div class="container topbar-content">
+    <div>
+      <strong>OnlyOffice Collab</strong>
+      <span class="user-info" *ngIf="authService.currentUser$ | async as user">
+        {{ user.userName }} · {{ user.role }}
+      </span>
+    </div>
+    <button class="btn btn-secondary" (click)="logout()">Salir</button>
+  </div>
+</header>
+
+<router-outlet></router-outlet>

@@ -1,0 +1,43 @@
+<section class="container">
+  <div class="card detail-card" *ngIf="document as item">
+    <div class="detail-header">
+      <div>
+        <button class="btn btn-secondary" routerLink="/documents">Volver</button>
+        <h2>{{ item.title }}</h2>
+        <p>{{ item.originalFileName }} · versión actual v{{ item.currentVersionNumber }}</p>
+      </div>
+      <button class="btn btn-primary" [disabled]="!item.canRead" (click)="openEditor()">Abrir editor</button>
+    </div>
+
+    <div class="detail-grid">
+      <div>
+        <h3>Información</h3>
+        <ul>
+          <li><strong>Formato:</strong> {{ item.fileType | uppercase }}</li>
+          <li><strong>Tamaño:</strong> {{ item.sizeInBytes | number }} bytes</li>
+          <li><strong>Creado por:</strong> {{ item.createdBy }}</li>
+          <li><strong>Actualizado:</strong> {{ item.updatedAtUtc | date:'short' }}</li>
+        </ul>
+      </div>
+
+      <div>
+        <h3>Historial de versiones</h3>
+        <div class="version-list">
+          <div class="version-item" *ngFor="let version of item.versions">
+            <div>
+              <strong>v{{ version.versionNumber }}</strong>
+              <div>{{ version.changeSummary }}</div>
+            </div>
+            <div>
+              <div>{{ version.createdBy }}</div>
+              <small>{{ version.createdAtUtc | date:'short' }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p *ngIf="loading">Cargando detalle...</p>
+  <p class="error-text" *ngIf="errorMessage">{{ errorMessage }}</p>
+</section>

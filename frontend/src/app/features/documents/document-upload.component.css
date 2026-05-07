@@ -1,0 +1,11 @@
+ .upload-card {
+  padding: 24px;
+}
+
+.upload-card h2 {
+  margin-top: 0;
+}
+
+.upload-card p {
+  color: #64748b;
+}

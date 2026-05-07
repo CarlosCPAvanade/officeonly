@@ -1,0 +1,17 @@
+ .topbar {
+  background: #0f172a;
+  color: #fff;
+  padding: 16px 0;
+  margin-bottom: 24px;
+}
+
+.topbar-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.user-info {
+  margin-left: 16px;
+  color: #cbd5e1;
+}

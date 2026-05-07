@@ -1,0 +1,47 @@
+<section class="container page-grid">
+  <app-document-upload (uploaded)="loadDocuments()"></app-document-upload>
+
+  <div class="card list-card">
+    <div class="list-header">
+      <div>
+        <h2>Documentos</h2>
+        <p>Listado con permisos, versión actual y accesos a edición.</p>
+      </div>
+      <button class="btn btn-secondary" (click)="loadDocuments()">Actualizar</button>
+    </div>
+
+    <p class="error-text" *ngIf="errorMessage">{{ errorMessage }}</p>
+    <p *ngIf="loading">Cargando documentos...</p>
+
+    <table *ngIf="!loading && documents.length > 0">
+      <thead>
+        <tr>
+          <th>Título</th>
+          <th>Formato</th>
+          <th>Versión</th>
+          <th>Actualizado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let document of documents">
+          <td>
+            <strong>{{ document.title }}</strong>
+            <div class="meta">{{ document.originalFileName }}</div>
+          </td>
+          <td><span class="tag">{{ document.fileType | uppercase }}</span></td>
+          <td>v{{ document.currentVersionNumber }}</td>
+          <td>{{ document.updatedAtUtc | date:'short' }}</td>
+          <td class="actions">
+            <button class="btn btn-secondary" (click)="openDetail(document.id)">Detalle</button>
+            <button class="btn btn-primary" [disabled]="!document.canRead" (click)="openEditor(document.id)">Abrir</button>
+            <button class="btn btn-secondary" [disabled]="!document.canRead" (click)="download(document)">Descargar</button>
+            <button class="btn btn-danger" *ngIf="document.canDelete" (click)="remove(document.id)">Eliminar</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p *ngIf="!loading && documents.length === 0">No hay documentos cargados.</p>
+  </div>
+</section>
