@@ -1,0 +1,24 @@
+<section class="editor-page">
+  <div class="editor-toolbar">
+    <div class="toolbar-info">
+      <a routerLink="/documents" class="btn btn-secondary">Volver a documentos</a>
+      <span class="mode-badge">Ejemplo con &#64;onlyoffice/document-editor-angular</span>
+    </div>
+  </div>
+
+  <p *ngIf="loading">Cargando editor ONLYOFFICE con wrapper oficial...</p>
+  <p class="error-text" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <div class="editor-frame card" [class.editor-frame-hidden]="!config || !!errorMessage">
+    <document-editor
+      *ngIf="config"
+      [id]="editorElementId"
+      [documentServerUrl]="documentServerUrl"
+      [config]="config"
+      [width]="'100%'"
+      [height]="'100%'"
+      [events_onDocumentReady]="onDocumentReady"
+      [onLoadComponentError]="onLoadComponentError"
+    ></document-editor>
+  </div>
+</section>

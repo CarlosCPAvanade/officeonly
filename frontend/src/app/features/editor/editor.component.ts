@@ -5,13 +5,11 @@ import { environment } from '../../../environments/environment';
 import { OnlyOfficeConfig } from '../../shared/models/document.models';
 import { EditorService } from './editor.service';
 
-declare global {
-  interface Window {
-    DocsAPI: {
-      DocEditor: new (elementId: string, config: Record<string, unknown>) => { destroyEditor: () => void };
-    };
-  }
-}
+type DocsApiWindow = Window & {
+  DocsAPI?: {
+    DocEditor: new (elementId: string, config: Record<string, unknown>) => { destroyEditor: () => void };
+  };
+};
 
 @Component({
   selector: 'app-editor',
@@ -52,7 +50,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
 
   private async ensureScriptLoaded(): Promise<void> {
-    if (window.DocsAPI) {
+    if ((window as DocsApiWindow).DocsAPI) {
       return;
     }
 
@@ -67,9 +65,16 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
 
   private mountEditor(config: OnlyOfficeConfig): void {
+    const docsApi = (window as DocsApiWindow).DocsAPI;
+
+    if (!docsApi) {
+      this.errorMessage = 'La API global de ONLYOFFICE no está disponible.';
+      return;
+    }
+
     this.editorInstance?.destroyEditor();
     this.editorHost.nativeElement.id = 'onlyoffice-editor-host';
-    this.editorInstance = new window.DocsAPI.DocEditor('onlyoffice-editor-host', {
+    this.editorInstance = new docsApi.DocEditor('onlyoffice-editor-host', {
       documentType: config.documentType,
       type: config.type,
       document: config.document,

@@ -1,10 +1,17 @@
 <header class="topbar" *ngIf="authService.isAuthenticated()">
   <div class="container topbar-content">
-    <div>
-      <strong>OnlyOffice Collab</strong>
-      <span class="user-info" *ngIf="authService.currentUser$ | async as user">
-        {{ user.userName }} · {{ user.role }}
-      </span>
+    <div class="topbar-main">
+      <div>
+        <strong>OnlyOffice Collab</strong>
+        <span class="user-info" *ngIf="authService.currentUser$ | async as user">
+          {{ user.userName }} · {{ user.role }}
+        </span>
+      </div>
+      <nav class="topbar-nav">
+        <a routerLink="/documents" routerLinkActive="topbar-link-active" class="topbar-link" [routerLinkActiveOptions]="{ exact: false }">Documentos</a>
+        <a routerLink="/editor/examples" routerLinkActive="topbar-link-active" class="topbar-link">Ejemplos ONLYOFFICE</a>
+        <span class="topbar-mode">Modo: {{ editorModeService.getModeLabel() }}</span>
+      </nav>
     </div>
     <button class="btn btn-secondary" (click)="logout()">Salir</button>
   </div>

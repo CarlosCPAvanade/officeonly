@@ -1,6 +1,33 @@
 <section class="container page-grid">
   <app-document-upload (uploaded)="loadDocuments()"></app-document-upload>
 
+  <div class="card editor-options-card">
+    <div class="editor-options-header">
+      <div>
+        <h2>Opciones de integración ONLYOFFICE</h2>
+        <p>Después del login puedes elegir qué implementación quieres abrir para dejarla como ejemplo reutilizable.</p>
+      </div>
+      <span class="selected-editor-pill">Seleccionada: {{ getSelectedEditorLabel() }}</span>
+    </div>
+
+    <div class="editor-option-grid">
+      <button class="editor-option" type="button" [class.editor-option-active]="selectedEditorMode === 'manual'" (click)="selectEditorMode('manual')">
+        <strong>Integración manual</strong>
+        <span>Carga directa de <code>api.js</code> y creación manual de <code>DocsAPI.DocEditor</code>.</span>
+      </button>
+
+      <button class="editor-option" type="button" [class.editor-option-active]="selectedEditorMode === 'angular'" (click)="selectEditorMode('angular')">
+        <strong>Wrapper Angular oficial</strong>
+        <span>Usa <code>&#64;onlyoffice/document-editor-angular&#64;6.5.1</code> para dejar un ejemplo replicable en otros proyectos.</span>
+      </button>
+
+      <a class="editor-option editor-option-link" routerLink="/editor/examples">
+        <strong>Pantalla de ejemplos</strong>
+        <span>Abre una tercera vista con snippets embebidos de backend y Angular para documentación interna.</span>
+      </a>
+    </div>
+  </div>
+
   <div class="card list-card">
     <div class="list-header">
       <div>
@@ -34,7 +61,7 @@
           <td>{{ document.updatedAtUtc | date:'short' }}</td>
           <td class="actions">
             <button class="btn btn-secondary" (click)="openDetail(document.id)">Detalle</button>
-            <button class="btn btn-primary" [disabled]="!document.canRead" (click)="openEditor(document.id)">Abrir</button>
+            <button class="btn btn-primary" [disabled]="!document.canRead" (click)="openEditor(document.id)">Abrir con modo seleccionado</button>
             <button class="btn btn-secondary" [disabled]="!document.canRead" (click)="download(document)">Descargar</button>
             <button class="btn btn-danger" *ngIf="document.canDelete" (click)="remove(document.id)">Eliminar</button>
           </td>

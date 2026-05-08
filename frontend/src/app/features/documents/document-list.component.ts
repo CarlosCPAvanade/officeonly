@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
+import { EditorMode, EditorModeService } from '../../core/onlyoffice/editor-mode.service';
 import { DocumentsService } from './documents.service';
 import { DocumentItem } from '../../shared/models/document.models';
 
@@ -13,11 +14,15 @@ export class DocumentListComponent implements OnInit {
   documents: DocumentItem[] = [];
   loading = false;
   errorMessage = '';
+  selectedEditorMode: EditorMode;
 
   constructor(
     public readonly documentsService: DocumentsService,
-    private readonly router: Router
-  ) {}
+    private readonly router: Router,
+    private readonly editorModeService: EditorModeService
+  ) {
+    this.selectedEditorMode = this.editorModeService.getMode();
+  }
 
   ngOnInit(): void {
     this.loadDocuments();
@@ -43,7 +48,16 @@ export class DocumentListComponent implements OnInit {
   }
 
   openEditor(documentId: string): void {
-    this.router.navigate(['/editor', documentId]);
+    this.router.navigate(this.editorModeService.buildEditorRoute(documentId, this.selectedEditorMode));
+  }
+
+  selectEditorMode(mode: EditorMode): void {
+    this.selectedEditorMode = mode;
+    this.editorModeService.setMode(mode);
+  }
+
+  getSelectedEditorLabel(): string {
+    return this.editorModeService.getModeLabel(this.selectedEditorMode);
   }
 
   download(item: DocumentItem): void {

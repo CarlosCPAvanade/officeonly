@@ -9,9 +9,55 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
+}
+
+.topbar-main {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.topbar-link {
+  color: #cbd5e1;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.topbar-link-active {
+  color: #fff;
+}
+
+.topbar-mode {
+  border-radius: 999px;
+  background: #164e63;
+  color: #cffafe;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .user-info {
   margin-left: 16px;
   color: #cbd5e1;
+}
+
+@media (max-width: 720px) {
+  .topbar-content {
+    align-items: flex-start;
+  }
+
+  .topbar-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
 }

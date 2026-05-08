@@ -4,8 +4,78 @@
   padding-bottom: 32px;
 }
 
+.editor-options-card,
 .list-card {
   padding: 24px;
+}
+
+.editor-options-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.editor-options-header h2 {
+  margin: 0 0 8px;
+}
+
+.editor-options-header p {
+  margin: 0;
+  color: #64748b;
+}
+
+.selected-editor-pill {
+  border-radius: 999px;
+  background: #ecfeff;
+  color: #155e75;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.editor-option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.editor-option {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  background: #fff;
+  padding: 18px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.editor-option-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.editor-option:hover {
+  border-color: #0f766e;
+  transform: translateY(-1px);
+}
+
+.editor-option-active {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.12);
+  background: #f0fdfa;
+}
+
+.editor-option strong {
+  font-size: 16px;
+}
+
+.editor-option span {
+  color: #475569;
+  line-height: 1.5;
 }
 
 .list-header {
@@ -52,4 +122,16 @@ td {
 
 .actions a {
   text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .editor-options-header,
+  .list-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .selected-editor-pill {
+    align-self: flex-start;
+  }
 }

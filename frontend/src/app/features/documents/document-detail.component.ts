@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { switchMap } from 'rxjs';
+import { EditorModeService } from '../../core/onlyoffice/editor-mode.service';
 import { DocumentDetail } from '../../shared/models/document.models';
 import { DocumentsService } from './documents.service';
 
@@ -18,7 +19,8 @@ export class DocumentDetailComponent implements OnInit {
   constructor(
     private readonly route: ActivatedRoute,
     private readonly router: Router,
-    private readonly documentsService: DocumentsService
+    private readonly documentsService: DocumentsService,
+    private readonly editorModeService: EditorModeService
   ) {}
 
   ngOnInit(): void {
@@ -41,6 +43,10 @@ export class DocumentDetailComponent implements OnInit {
       return;
     }
 
-    this.router.navigate(['/editor', this.document.id]);
+    this.router.navigate(this.editorModeService.buildEditorRoute(this.document.id));
+  }
+
+  getSelectedEditorLabel(): string {
+    return this.editorModeService.getModeLabel();
   }
 }

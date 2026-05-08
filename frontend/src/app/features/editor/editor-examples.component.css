@@ -1,0 +1,54 @@
+.examples-page {
+  display: grid;
+  gap: 16px;
+  padding: 0 16px 24px;
+}
+
+.examples-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.examples-pill {
+  border-radius: 999px;
+  background: #ecfccb;
+  color: #365314;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.examples-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.example-card {
+  padding: 24px;
+}
+
+.example-card h2 {
+  margin: 0 0 10px;
+}
+
+.example-card p {
+  margin: 0 0 16px;
+  color: #475569;
+}
+
+.example-card pre {
+  margin: 0;
+  overflow: auto;
+  padding: 16px;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.example-card code {
+  font-family: Consolas, 'Courier New', monospace;
+}

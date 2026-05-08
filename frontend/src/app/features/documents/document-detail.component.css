@@ -19,6 +19,13 @@
   color: #64748b;
 }
 
+.detail-mode {
+  display: inline-block;
+  margin-top: 10px;
+  color: #0f766e;
+  font-weight: 600;
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
