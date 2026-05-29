@@ -1,0 +1,279 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using FormaOnly.API.Services;
+using Microsoft.AspNetCore.Mvc;
+
+namespace FormaOnly.API.Controllers;
+
+[ApiController]
+[Route("api/v1/onlyoffice")]
+public class OnlyOfficeController : ControllerBase
+{
+    private readonly DocumentCatalogService _catalogService;
+    private readonly IConfiguration _configuration;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILogger<OnlyOfficeController> _logger;
+
+    public OnlyOfficeController(
+        DocumentCatalogService catalogService,
+        IConfiguration configuration,
+        IHttpClientFactory httpClientFactory,
+        ILogger<OnlyOfficeController> logger)
+    {
+        _catalogService = catalogService;
+        _configuration = configuration;
+        _httpClientFactory = httpClientFactory;
+        _logger = logger;
+    }
+
+    // Devuelve la configuracion del editor para el documento seleccionado.
+    [HttpGet("config/{documentId:guid}")]
+    [ProducesResponseType(typeof(OnlyOfficeEditorConfig), StatusCodes.Status200OK)]
+    public IActionResult GetConfig(Guid documentId)
+    {
+        var backendPublicBaseUrl = _configuration["OnlyOffice:BackendPublicBaseUrl"];
+        if (string.IsNullOrWhiteSpace(backendPublicBaseUrl))
+        {
+            return Problem("Falta la configuración OnlyOffice:BackendPublicBaseUrl.");
+        }
+
+        var document = _catalogService.EnsureDocument(documentId, user: "onlyoffice-config");
+        var fileUrl = $"{backendPublicBaseUrl}/api/v1/onlyoffice/files/{documentId}";
+        var callbackUrl = $"{backendPublicBaseUrl}/api/v1/onlyoffice/callback/{documentId}";
+
+        var config = new OnlyOfficeEditorConfig
+        {
+            Document = new OnlyOfficeDocumentConfig
+            {
+                FileType = "docx",
+                Key = $"doc-{documentId}-v{document.CurrentVersionNumber}",
+                Title = document.Name,
+                Url = fileUrl,
+                Permissions = new OnlyOfficeDocumentPermissions
+                {
+                    Copy = true,
+                    Download = true,
+                    Edit = true,
+                    Print = true,
+                    Review = true
+                }
+            },
+            DocumentType = "word",
+            EditorConfig = new OnlyOfficeEditorSettings
+            {
+                CallbackUrl = callbackUrl,
+                // createUrl habilita el comando Nuevo desde el editor.
+                CreateUrl = "/onlyoffice",
+                Mode = "edit",
+                Customization = new OnlyOfficeEditorCustomization
+                {
+                    Autosave = true,
+                    Forcesave = true
+                },
+                User = new OnlyOfficeUserConfig
+                {
+                    Id = "1",
+                    Name = "Administrador"
+                }
+            }
+        };
+
+        if (IsJwtEnabled())
+        {
+            config.Token = GenerateToken(config);
+        }
+
+        return Ok(config);
+    }
+
+    // Expone el binario que ONLYOFFICE tiene que abrir.
+    [HttpGet("files/{documentId:guid}")]
+    public IActionResult GetFile(Guid documentId)
+    {
+        _catalogService.EnsureDocument(documentId, user: "onlyoffice-file");
+        var path = _catalogService.GetCurrentFilePath(documentId);
+
+        if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path))
+        {
+            path = _catalogService.GetSeedFilePath();
+        }
+
+        if (!System.IO.File.Exists(path))
+        {
+            return NotFound("No existe el archivo de prueba.");
+        }
+
+        var bytes = System.IO.File.ReadAllBytes(path);
+
+        return File(
+            bytes,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "demo.docx");
+    }
+
+    // Recibe el callback de guardado y crea una nueva version del documento.
+    [HttpPost("callback/{documentId:guid}")]
+    public async Task<IActionResult> Callback(Guid documentId, [FromBody] OnlyOfficeCallbackRequest request)
+    {
+        _logger.LogInformation(
+            "Callback recibido para {DocumentId}. Status: {Status}, Url: {Url}",
+            documentId,
+            request.Status,
+            request.Url);
+
+        if (request.Status is not (2 or 6))
+        {
+            return Ok(new { error = 0 });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Url))
+        {
+            return Ok(new { error = 0 });
+        }
+
+        var client = _httpClientFactory.CreateClient();
+        var fileBytes = await client.GetByteArrayAsync(request.Url);
+        _catalogService.EnsureDocument(documentId, user: "onlyoffice-callback");
+        _catalogService.AddVersion(documentId, fileBytes, source: "onlyoffice-callback", user: "onlyoffice-callback");
+
+        return Ok(new { error = 0 });
+    }
+
+    private bool IsJwtEnabled()
+    {
+        return bool.TryParse(_configuration["OnlyOffice:JwtEnabled"], out var enabled) && enabled;
+    }
+
+    // Se firma manualmente porque ONLYOFFICE acepta este secreto local y resulta mas directo para esta integracion.
+    private string GenerateToken(OnlyOfficeEditorConfig config)
+    {
+        var secret = _configuration["OnlyOffice:JwtSecret"];
+        if (string.IsNullOrWhiteSpace(secret))
+        {
+            throw new InvalidOperationException("Falta la configuración OnlyOffice:JwtSecret.");
+        }
+
+        var payload = new Dictionary<string, object>
+        {
+            { "document", new Dictionary<string, object>
+                {
+                    { "fileType", config.Document.FileType },
+                    { "key", config.Document.Key },
+                    { "title", config.Document.Title },
+                    { "url", config.Document.Url },
+                    { "permissions", new Dictionary<string, object>
+                        {
+                            { "copy", config.Document.Permissions.Copy },
+                            { "download", config.Document.Permissions.Download },
+                            { "edit", config.Document.Permissions.Edit },
+                            { "print", config.Document.Permissions.Print },
+                            { "review", config.Document.Permissions.Review }
+                        }
+                    }
+                }
+            },
+            { "documentType", config.DocumentType },
+            { "editorConfig", new Dictionary<string, object>
+                {
+                    { "callbackUrl", config.EditorConfig.CallbackUrl },
+                    { "createUrl", config.EditorConfig.CreateUrl },
+                    { "mode", config.EditorConfig.Mode },
+                    { "customization", new Dictionary<string, object>
+                        {
+                            { "autosave", config.EditorConfig.Customization.Autosave },
+                            { "forcesave", config.EditorConfig.Customization.Forcesave }
+                        }
+                    },
+                    { "user", new Dictionary<string, object>
+                        {
+                            { "id", config.EditorConfig.User.Id },
+                            { "name", config.EditorConfig.User.Name }
+                        }
+                    }
+                }
+            }
+        };
+
+        var header = new Dictionary<string, object>
+        {
+            { "alg", "HS256" },
+            { "typ", "JWT" }
+        };
+
+        var headerEncoded = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(header));
+        var payloadEncoded = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(payload));
+        var signatureInput = $"{headerEncoded}.{payloadEncoded}";
+
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
+        var signature = hmac.ComputeHash(Encoding.UTF8.GetBytes(signatureInput));
+
+        return $"{signatureInput}.{Base64UrlEncode(signature)}";
+    }
+
+    private static string Base64UrlEncode(byte[] data)
+    {
+        return Convert.ToBase64String(data)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+    }
+}
+
+public sealed class OnlyOfficeEditorConfig
+{
+    public OnlyOfficeDocumentConfig Document { get; set; } = new();
+    public string DocumentType { get; set; } = "word";
+    public OnlyOfficeEditorSettings EditorConfig { get; set; } = new();
+    public string? Token { get; set; }
+}
+
+public sealed class OnlyOfficeDocumentConfig
+{
+    public string FileType { get; set; } = "docx";
+    public string Key { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
+    public OnlyOfficeDocumentPermissions Permissions { get; set; } = new();
+}
+
+public sealed class OnlyOfficeDocumentPermissions
+{
+    public bool Copy { get; set; }
+    public bool Download { get; set; }
+    public bool Edit { get; set; }
+    public bool Print { get; set; }
+    public bool Review { get; set; }
+}
+
+public sealed class OnlyOfficeEditorSettings
+{
+    public string CallbackUrl { get; set; } = string.Empty;
+    public string CreateUrl { get; set; } = string.Empty;
+    public string Mode { get; set; } = "edit";
+    public OnlyOfficeEditorCustomization Customization { get; set; } = new();
+    public OnlyOfficeUserConfig User { get; set; } = new();
+}
+
+public sealed class OnlyOfficeEditorCustomization
+{
+    [JsonPropertyName("autosave")]
+    public bool Autosave { get; set; }
+
+    [JsonPropertyName("forcesave")]
+    public bool Forcesave { get; set; }
+}
+
+public sealed class OnlyOfficeUserConfig
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+}
+
+public sealed class OnlyOfficeCallbackRequest
+{
+    public int Status { get; set; }
+    public string? Url { get; set; }
+    public string? Key { get; set; }
+}
