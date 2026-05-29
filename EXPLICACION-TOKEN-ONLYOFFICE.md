@@ -19,6 +19,68 @@ El flujo es este:
 5. Si JWT esta habilitado, asigna `config.Token = GenerateToken(config)`.
 6. Devuelve `Ok(config)` al frontend.
 
+## Codigo real de GetConfig
+
+Este es el metodo tal y como se usa ahora en la app para construir la configuracion y, si corresponde, insertar el token:
+
+```csharp
+public IActionResult GetConfig(Guid documentId)
+{
+  var backendPublicBaseUrl = _configuration["OnlyOffice:BackendPublicBaseUrl"];
+  if (string.IsNullOrWhiteSpace(backendPublicBaseUrl))
+  {
+    return Problem("Falta la configuración OnlyOffice:BackendPublicBaseUrl.");
+  }
+
+  var document = _catalogService.EnsureDocument(documentId, user: "onlyoffice-config");
+  var fileUrl = $"{backendPublicBaseUrl}/api/v1/onlyoffice/files/{documentId}";
+  var callbackUrl = $"{backendPublicBaseUrl}/api/v1/onlyoffice/callback/{documentId}";
+
+  var config = new OnlyOfficeEditorConfig
+  {
+    Document = new OnlyOfficeDocumentConfig
+    {
+      FileType = "docx",
+      Key = $"doc-{documentId}-v{document.CurrentVersionNumber}",
+      Title = document.Name,
+      Url = fileUrl,
+      Permissions = new OnlyOfficeDocumentPermissions
+      {
+        Copy = true,
+        Download = true,
+        Edit = true,
+        Print = true,
+        Review = true
+      }
+    },
+    DocumentType = "word",
+    EditorConfig = new OnlyOfficeEditorSettings
+    {
+      CallbackUrl = callbackUrl,
+      CreateUrl = "/onlyoffice",
+      Mode = "edit",
+      Customization = new OnlyOfficeEditorCustomization
+      {
+        Autosave = true,
+        Forcesave = true
+      },
+      User = new OnlyOfficeUserConfig
+      {
+        Id = "1",
+        Name = "Administrador"
+      }
+    }
+  };
+
+  if (IsJwtEnabled())
+  {
+    config.Token = GenerateToken(config);
+  }
+
+  return Ok(config);
+}
+```
+
 ## Donde se decide si hay token
 
 La decision se toma en el metodo privado `IsJwtEnabled()`:
@@ -54,6 +116,77 @@ Las dos claves importantes para el token son:
 ## Como se crea el token
 
 La firma ocurre en el metodo `GenerateToken(OnlyOfficeEditorConfig config)`.
+
+## Codigo real de GenerateToken
+
+Este es el metodo completo con la implementacion actual de la app:
+
+```csharp
+private string GenerateToken(OnlyOfficeEditorConfig config)
+{
+  var secret = _configuration["OnlyOffice:JwtSecret"];
+  if (string.IsNullOrWhiteSpace(secret))
+  {
+    throw new InvalidOperationException("Falta la configuración OnlyOffice:JwtSecret.");
+  }
+
+  var payload = new Dictionary<string, object>
+  {
+    { "document", new Dictionary<string, object>
+      {
+        { "fileType", config.Document.FileType },
+        { "key", config.Document.Key },
+        { "title", config.Document.Title },
+        { "url", config.Document.Url },
+        { "permissions", new Dictionary<string, object>
+          {
+            { "copy", config.Document.Permissions.Copy },
+            { "download", config.Document.Permissions.Download },
+            { "edit", config.Document.Permissions.Edit },
+            { "print", config.Document.Permissions.Print },
+            { "review", config.Document.Permissions.Review }
+          }
+        }
+      }
+    },
+    { "documentType", config.DocumentType },
+    { "editorConfig", new Dictionary<string, object>
+      {
+        { "callbackUrl", config.EditorConfig.CallbackUrl },
+        { "createUrl", config.EditorConfig.CreateUrl },
+        { "mode", config.EditorConfig.Mode },
+        { "customization", new Dictionary<string, object>
+          {
+            { "autosave", config.EditorConfig.Customization.Autosave },
+            { "forcesave", config.EditorConfig.Customization.Forcesave }
+          }
+        },
+        { "user", new Dictionary<string, object>
+          {
+            { "id", config.EditorConfig.User.Id },
+            { "name", config.EditorConfig.User.Name }
+          }
+        }
+      }
+    }
+  };
+
+  var header = new Dictionary<string, object>
+  {
+    { "alg", "HS256" },
+    { "typ", "JWT" }
+  };
+
+  var headerEncoded = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(header));
+  var payloadEncoded = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(payload));
+  var signatureInput = $"{headerEncoded}.{payloadEncoded}";
+
+  using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
+  var signature = hmac.ComputeHash(Encoding.UTF8.GetBytes(signatureInput));
+
+  return $"{signatureInput}.{Base64UrlEncode(signature)}";
+}
+```
 
 ### 1. Lee el secreto
 
