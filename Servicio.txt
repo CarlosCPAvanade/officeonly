@@ -1,0 +1,842 @@
+using System.Text.Json;
+using System.IO.Compression;
+
+namespace FormaOnly.API.Services;
+
+public sealed class DocumentCatalogService
+{
+    private const string SystemUser = "system";
+
+    // El catalogo se serializa en JSON legible para poder inspeccionarlo a mano.
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true
+    };
+
+    private readonly IWebHostEnvironment _environment;
+    private readonly object _syncRoot = new();
+
+    public DocumentCatalogService(IWebHostEnvironment environment)
+    {
+        _environment = environment;
+    }
+
+    // Devuelve el listado de documentos, con opcion de incluir la papelera.
+    public IReadOnlyCollection<DocumentSummary> GetDocuments(bool includeDeleted = false)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+
+            return catalog.Documents
+                .Where(document => includeDeleted || !document.IsDeleted)
+                .OrderByDescending(document => document.UpdatedAtUtc)
+                .Select(ToSummary)
+                .ToArray();
+        }
+    }
+
+    public DocumentDetails? GetDocument(Guid documentId)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+            var document = catalog.Documents.SingleOrDefault(item => item.Id == documentId);
+
+            return document is null ? null : ToDetails(document);
+        }
+    }
+
+    // Si el documento no existe todavia, lo inicializa desde demo.docx.
+    public DocumentDetails EnsureDocument(Guid documentId, string? name = null, string? user = null)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+            var document = catalog.Documents.SingleOrDefault(item => item.Id == documentId);
+
+            if (document is null)
+            {
+                Directory.CreateDirectory(GetDocumentVersionsDirectory(documentId));
+
+                            var seedFilePath = ResolveSeedFilePath(catalog);
+                            if (seedFilePath is null)
+                {
+                                throw new FileNotFoundException("No existe el archivo semilla demo.docx ni ningun .docx reutilizable en app_data.", GetSeedFilePath());
+                }
+
+                var now = DateTime.UtcNow;
+                var normalizedName = string.IsNullOrWhiteSpace(name) ? "demo.docx" : name.Trim();
+                var firstVersionPath = GetVersionFilePath(documentId, 1, normalizedName);
+                File.Copy(seedFilePath, firstVersionPath, true);
+
+                var fileInfo = new FileInfo(firstVersionPath);
+                document = new DocumentRecord
+                {
+                    Id = documentId,
+                    Name = normalizedName,
+                    CurrentVersionNumber = 1,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                    Versions =
+                    [
+                        new DocumentVersionRecord
+                        {
+                            VersionNumber = 1,
+                            FileName = normalizedName,
+                            RelativePath = GetRelativeVersionPath(documentId, 1, normalizedName),
+                            SizeInBytes = fileInfo.Length,
+                            CreatedAtUtc = now,
+                            CreatedBy = user ?? SystemUser,
+                            Source = "seed"
+                        }
+                    ],
+                    History =
+                    [
+                        new DocumentHistoryRecord
+                        {
+                            Id = Guid.NewGuid(),
+                            Type = "created",
+                            VersionNumber = 1,
+                            User = user ?? SystemUser,
+                            Details = "Documento inicializado desde demo.docx.",
+                            OccurredAtUtc = now
+                        }
+                    ]
+                };
+
+                catalog.Documents.Add(document);
+                SaveCatalog(catalog);
+            }
+
+            return ToDetails(document);
+        }
+    }
+
+    // Crea un documento nuevo vacio a partir de la semilla.
+    public DocumentDetails CreateDocument(string? name = null, string? user = null)
+    {
+        return EnsureDocument(Guid.NewGuid(), name, user);
+    }
+
+    // Crea un documento nuevo usando un archivo subido por el usuario.
+    public DocumentDetails CreateDocumentFromUpload(string fileName, byte[] content, string? user = null)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+            var documentId = Guid.NewGuid();
+            var now = DateTime.UtcNow;
+            var normalizedName = NormalizeFileName(fileName);
+            var firstVersionPath = GetVersionFilePath(documentId, 1, normalizedName);
+
+            Directory.CreateDirectory(GetDocumentVersionsDirectory(documentId));
+            File.WriteAllBytes(firstVersionPath, content);
+
+            var fileInfo = new FileInfo(firstVersionPath);
+            var document = new DocumentRecord
+            {
+                Id = documentId,
+                Name = normalizedName,
+                CurrentVersionNumber = 1,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+                Versions =
+                [
+                    new DocumentVersionRecord
+                    {
+                        VersionNumber = 1,
+                        FileName = normalizedName,
+                        RelativePath = GetRelativeVersionPath(documentId, 1, normalizedName),
+                        SizeInBytes = fileInfo.Length,
+                        CreatedAtUtc = now,
+                        CreatedBy = user ?? SystemUser,
+                        Source = "upload"
+                    }
+                ],
+                History =
+                [
+                    new DocumentHistoryRecord
+                    {
+                        Id = Guid.NewGuid(),
+                        Type = "created",
+                        VersionNumber = 1,
+                        User = user ?? SystemUser,
+                        Details = "Documento creado desde un archivo subido.",
+                        OccurredAtUtc = now
+                    }
+                ]
+            };
+
+            catalog.Documents.Add(document);
+            SaveCatalog(catalog);
+
+            return ToDetails(document);
+        }
+    }
+
+    // Implementa Guardar como copiando la version actual a un documento nuevo.
+    public DocumentDetails? DuplicateDocument(Guid documentId, string? name = null, string? user = null)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+            var sourceDocument = catalog.Documents.SingleOrDefault(item => item.Id == documentId);
+            if (sourceDocument is null)
+            {
+                return null;
+            }
+
+            var currentVersion = sourceDocument.Versions.SingleOrDefault(item => item.VersionNumber == sourceDocument.CurrentVersionNumber);
+            if (currentVersion is null)
+            {
+                return null;
+            }
+
+            var sourcePath = GetAbsolutePath(currentVersion.RelativePath);
+            if (!File.Exists(sourcePath))
+            {
+                return null;
+            }
+
+            var duplicateContent = File.ReadAllBytes(sourcePath);
+            var duplicateName = string.IsNullOrWhiteSpace(name) ? BuildCopyName(sourceDocument.Name) : NormalizeFileName(name);
+            var duplicatedDocument = CreateDocumentFromBytes(catalog, duplicateName, duplicateContent, user, "save-as", "Documento creado con Guardar como.");
+
+            sourceDocument.History.Add(new DocumentHistoryRecord
+            {
+                Id = Guid.NewGuid(),
+                Type = "save-as",
+                VersionNumber = sourceDocument.CurrentVersionNumber,
+                User = user ?? SystemUser,
+                Details = $"Se genero una copia como {duplicatedDocument.Name}.",
+                OccurredAtUtc = DateTime.UtcNow
+            });
+            sourceDocument.UpdatedAtUtc = DateTime.UtcNow;
+
+            SaveCatalog(catalog);
+            return ToDetails(duplicatedDocument);
+        }
+    }
+
+    // Mueve el documento a papelera sin borrar sus binarios.
+    public bool DeleteDocument(Guid documentId, string? user = null)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+            var document = catalog.Documents.SingleOrDefault(item => item.Id == documentId);
+            if (document is null || document.IsDeleted)
+            {
+                return false;
+            }
+
+            document.IsDeleted = true;
+            document.UpdatedAtUtc = DateTime.UtcNow;
+            document.DeletedAtUtc = document.UpdatedAtUtc;
+            document.History.Add(new DocumentHistoryRecord
+            {
+                Id = Guid.NewGuid(),
+                Type = "deleted",
+                VersionNumber = document.CurrentVersionNumber,
+                User = user ?? SystemUser,
+                Details = "Documento marcado como eliminado.",
+                OccurredAtUtc = document.UpdatedAtUtc
+            });
+
+            SaveCatalog(catalog);
+            return true;
+        }
+    }
+
+    // Saca el documento de papelera.
+    public bool RestoreDocument(Guid documentId, string? user = null)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+            var document = catalog.Documents.SingleOrDefault(item => item.Id == documentId);
+            if (document is null || !document.IsDeleted)
+            {
+                return false;
+            }
+
+            document.IsDeleted = false;
+            document.DeletedAtUtc = null;
+            document.UpdatedAtUtc = DateTime.UtcNow;
+            document.History.Add(new DocumentHistoryRecord
+            {
+                Id = Guid.NewGuid(),
+                Type = "restored",
+                VersionNumber = document.CurrentVersionNumber,
+                User = user ?? SystemUser,
+                Details = "Documento restaurado desde borrado lógico.",
+                OccurredAtUtc = document.UpdatedAtUtc
+            });
+
+            SaveCatalog(catalog);
+            return true;
+        }
+    }
+
+    // Agrega una nueva version del documento, usada tanto para upload como para callback de ONLYOFFICE.
+    public DocumentVersionDetails AddVersion(Guid documentId, byte[] content, string? name = null, string source = "manual", string? user = null)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+            var document = catalog.Documents.SingleOrDefault(item => item.Id == documentId);
+            if (document is null)
+            {
+                throw new InvalidOperationException($"No existe el documento {documentId}.");
+            }
+
+            var versionNumber = document.CurrentVersionNumber + 1;
+            var normalizedName = NormalizeFileName(string.IsNullOrWhiteSpace(name) ? document.Name : name.Trim());
+            var versionPath = GetVersionFilePath(documentId, versionNumber, normalizedName);
+
+            Directory.CreateDirectory(GetDocumentVersionsDirectory(documentId));
+            File.WriteAllBytes(versionPath, content);
+
+            var now = DateTime.UtcNow;
+            var fileInfo = new FileInfo(versionPath);
+
+            var version = new DocumentVersionRecord
+            {
+                VersionNumber = versionNumber,
+                FileName = normalizedName,
+                RelativePath = GetRelativeVersionPath(documentId, versionNumber, normalizedName),
+                SizeInBytes = fileInfo.Length,
+                CreatedAtUtc = now,
+                CreatedBy = user ?? SystemUser,
+                Source = source
+            };
+
+            document.Name = normalizedName;
+            document.CurrentVersionNumber = versionNumber;
+            document.UpdatedAtUtc = now;
+            document.Versions.Add(version);
+            document.History.Add(new DocumentHistoryRecord
+            {
+                Id = Guid.NewGuid(),
+                Type = "version-created",
+                VersionNumber = versionNumber,
+                User = user ?? SystemUser,
+                Details = $"Se creó la versión {versionNumber} desde {source}.",
+                OccurredAtUtc = now
+            });
+
+            SaveCatalog(catalog);
+            return ToVersionDetails(version);
+        }
+    }
+
+    public DocumentVersionDetails AddVersionFromUpload(Guid documentId, string fileName, byte[] content, string? user = null)
+    {
+        return AddVersion(documentId, content, NormalizeFileName(fileName), "upload", user);
+    }
+
+    // Restaura una version antigua creando una nueva version activa.
+    public DocumentVersionDetails? RestoreVersion(Guid documentId, int versionNumber, string? user = null)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+            var document = catalog.Documents.SingleOrDefault(item => item.Id == documentId);
+            if (document is null)
+            {
+                return null;
+            }
+
+            var sourceVersion = document.Versions.SingleOrDefault(item => item.VersionNumber == versionNumber);
+            if (sourceVersion is null)
+            {
+                return null;
+            }
+
+            var sourcePath = GetAbsolutePath(sourceVersion.RelativePath);
+            if (!File.Exists(sourcePath))
+            {
+                return null;
+            }
+
+            var restoredVersionNumber = document.CurrentVersionNumber + 1;
+            var targetPath = GetVersionFilePath(documentId, restoredVersionNumber, sourceVersion.FileName);
+            Directory.CreateDirectory(GetDocumentVersionsDirectory(documentId));
+            File.Copy(sourcePath, targetPath, true);
+
+            var now = DateTime.UtcNow;
+            var fileInfo = new FileInfo(targetPath);
+            var restoredVersion = new DocumentVersionRecord
+            {
+                VersionNumber = restoredVersionNumber,
+                FileName = sourceVersion.FileName,
+                RelativePath = GetRelativeVersionPath(documentId, restoredVersionNumber, sourceVersion.FileName),
+                SizeInBytes = fileInfo.Length,
+                CreatedAtUtc = now,
+                CreatedBy = user ?? SystemUser,
+                Source = $"restore:v{versionNumber}"
+            };
+
+            document.Name = sourceVersion.FileName;
+            document.CurrentVersionNumber = restoredVersionNumber;
+            document.IsDeleted = false;
+            document.DeletedAtUtc = null;
+            document.UpdatedAtUtc = now;
+            document.Versions.Add(restoredVersion);
+            document.History.Add(new DocumentHistoryRecord
+            {
+                Id = Guid.NewGuid(),
+                Type = "version-restored",
+                VersionNumber = restoredVersionNumber,
+                User = user ?? SystemUser,
+                Details = $"Se restauró la versión {versionNumber} como nueva versión {restoredVersionNumber}.",
+                OccurredAtUtc = now
+            });
+
+            SaveCatalog(catalog);
+            return ToVersionDetails(restoredVersion);
+        }
+    }
+
+    public IReadOnlyCollection<DocumentVersionDetails> GetVersions(Guid documentId)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+            var document = catalog.Documents.SingleOrDefault(item => item.Id == documentId);
+
+            return document is null
+                ? Array.Empty<DocumentVersionDetails>()
+                : document.Versions
+                    .OrderByDescending(version => version.VersionNumber)
+                    .Select(ToVersionDetails)
+                    .ToArray();
+        }
+    }
+
+    public IReadOnlyCollection<DocumentHistoryEntry> GetHistory(Guid documentId)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+            var document = catalog.Documents.SingleOrDefault(item => item.Id == documentId);
+
+            return document is null
+                ? Array.Empty<DocumentHistoryEntry>()
+                : document.History
+                    .OrderByDescending(entry => entry.OccurredAtUtc)
+                    .Select(ToHistoryEntry)
+                    .ToArray();
+        }
+    }
+
+    public string? GetCurrentFilePath(Guid documentId)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+            var document = catalog.Documents.SingleOrDefault(item => item.Id == documentId);
+            if (document is null || document.Versions.Count == 0)
+            {
+                return null;
+            }
+
+            var currentVersion = document.Versions.Single(item => item.VersionNumber == document.CurrentVersionNumber);
+            return GetAbsolutePath(currentVersion.RelativePath);
+        }
+    }
+
+    public DocumentVersionDetails? GetCurrentVersion(Guid documentId)
+    {
+        lock (_syncRoot)
+        {
+            var catalog = LoadCatalog();
+            var document = catalog.Documents.SingleOrDefault(item => item.Id == documentId);
+            if (document is null || document.Versions.Count == 0)
+            {
+                return null;
+            }
+
+            var currentVersion = document.Versions.Single(item => item.VersionNumber == document.CurrentVersionNumber);
+            return ToVersionDetails(currentVersion);
+        }
+    }
+
+    public string GetSeedFilePath()
+    {
+        return Path.Combine(GetAppDataDirectory(), "demo.docx");
+    }
+
+    public string? GetSeedOrFallbackFilePath()
+    {
+        lock (_syncRoot)
+        {
+            return ResolveSeedFilePath(LoadCatalog());
+        }
+    }
+
+    private CatalogStore LoadCatalog()
+    {
+        Directory.CreateDirectory(GetAppDataDirectory());
+        var filePath = GetCatalogFilePath();
+
+        if (!File.Exists(filePath))
+        {
+            return new CatalogStore();
+        }
+
+        var json = File.ReadAllText(filePath);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new CatalogStore();
+        }
+
+        return JsonSerializer.Deserialize<CatalogStore>(json, SerializerOptions) ?? new CatalogStore();
+    }
+
+    private void SaveCatalog(CatalogStore catalog)
+    {
+        Directory.CreateDirectory(GetAppDataDirectory());
+        var json = JsonSerializer.Serialize(catalog, SerializerOptions);
+        File.WriteAllText(GetCatalogFilePath(), json);
+    }
+
+    private string GetCatalogFilePath()
+    {
+        return Path.Combine(GetAppDataDirectory(), "documents.catalog.json");
+    }
+
+    private string GetAppDataDirectory()
+    {
+        return Path.Combine(_environment.ContentRootPath, "App_Data");
+    }
+
+    private string GetDocumentVersionsDirectory(Guid documentId)
+    {
+        return Path.Combine(GetAppDataDirectory(), "Documents", documentId.ToString(), "Versions");
+    }
+
+    private string GetVersionFilePath(Guid documentId, int versionNumber, string fileName)
+    {
+        return Path.Combine(GetDocumentVersionsDirectory(documentId), $"v{versionNumber}{NormalizeExtension(fileName)}");
+    }
+
+    private static string GetRelativeVersionPath(Guid documentId, int versionNumber, string fileName)
+    {
+        return Path.Combine("Documents", documentId.ToString(), "Versions", $"v{versionNumber}{NormalizeExtension(fileName)}");
+    }
+
+    private string GetAbsolutePath(string relativePath)
+    {
+        var segments = relativePath
+            .Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+
+        return segments.Length == 0
+            ? GetAppDataDirectory()
+            : Path.Combine([GetAppDataDirectory(), .. segments]);
+    }
+
+    private string? ResolveSeedFilePath(CatalogStore catalog)
+    {
+        var preferredSeedPath = GetSeedFilePath();
+        if (File.Exists(preferredSeedPath))
+        {
+            return preferredSeedPath;
+        }
+
+        foreach (var versionPath in catalog.Documents
+                     .SelectMany(document => document.Versions)
+                     .OrderBy(version => version.CreatedAtUtc)
+                     .Select(version => GetAbsolutePath(version.RelativePath)))
+        {
+            if (File.Exists(versionPath))
+            {
+                return versionPath;
+            }
+        }
+
+        return null;
+    }
+
+    // Helper interno para centralizar la creacion de documentos binarios nuevos.
+    private DocumentRecord CreateDocumentFromBytes(CatalogStore catalog, string fileName, byte[] content, string? user, string source, string createdDetails)
+    {
+        var documentId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var normalizedName = NormalizeFileName(fileName);
+        var firstVersionPath = GetVersionFilePath(documentId, 1, normalizedName);
+
+        Directory.CreateDirectory(GetDocumentVersionsDirectory(documentId));
+        File.WriteAllBytes(firstVersionPath, content);
+
+        var fileInfo = new FileInfo(firstVersionPath);
+        var document = new DocumentRecord
+        {
+            Id = documentId,
+            Name = normalizedName,
+            CurrentVersionNumber = 1,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            Versions =
+            [
+                new DocumentVersionRecord
+                {
+                    VersionNumber = 1,
+                    FileName = normalizedName,
+                    RelativePath = GetRelativeVersionPath(documentId, 1, normalizedName),
+                    SizeInBytes = fileInfo.Length,
+                    CreatedAtUtc = now,
+                    CreatedBy = user ?? SystemUser,
+                    Source = source
+                }
+            ],
+            History =
+            [
+                new DocumentHistoryRecord
+                {
+                    Id = Guid.NewGuid(),
+                    Type = "created",
+                    VersionNumber = 1,
+                    User = user ?? SystemUser,
+                    Details = createdDetails,
+                    OccurredAtUtc = now
+                }
+            ]
+        };
+
+        catalog.Documents.Add(document);
+        return document;
+    }
+
+    private static string NormalizeFileName(string fileName)
+    {
+        return string.IsNullOrWhiteSpace(fileName) ? "documento.docx" : Path.GetFileName(fileName.Trim());
+    }
+
+    private static string NormalizeExtension(string fileName)
+    {
+        var extension = Path.GetExtension(fileName);
+        return string.IsNullOrWhiteSpace(extension) ? ".docx" : extension.ToLowerInvariant();
+    }
+
+    private static string BuildCopyName(string originalFileName)
+    {
+        var normalizedName = NormalizeFileName(originalFileName);
+        var extension = Path.GetExtension(normalizedName);
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(normalizedName);
+
+        return string.IsNullOrWhiteSpace(extension)
+            ? $"{fileNameWithoutExtension}-copia"
+            : $"{fileNameWithoutExtension}-copia{extension}";
+    }
+
+    private static DocumentSummary ToSummary(DocumentRecord document)
+    {
+        return new DocumentSummary(
+            document.Id,
+            document.Name,
+            document.CurrentVersionNumber,
+            document.IsDeleted,
+            document.CreatedAtUtc,
+            document.UpdatedAtUtc);
+    }
+
+    private static DocumentDetails ToDetails(DocumentRecord document)
+    {
+        return new DocumentDetails(
+            document.Id,
+            document.Name,
+            document.CurrentVersionNumber,
+            document.IsDeleted,
+            document.CreatedAtUtc,
+            document.UpdatedAtUtc,
+            document.Versions
+                .OrderByDescending(version => version.VersionNumber)
+                .Select(ToVersionDetails)
+                .ToArray(),
+            document.History
+                .OrderByDescending(entry => entry.OccurredAtUtc)
+                .Select(ToHistoryEntry)
+                .ToArray());
+    }
+
+    private static DocumentVersionDetails ToVersionDetails(DocumentVersionRecord version)
+    {
+        return new DocumentVersionDetails(
+            version.VersionNumber,
+            version.FileName,
+            version.SizeInBytes,
+            version.Source,
+            version.CreatedBy,
+            version.CreatedAtUtc);
+    }
+
+    private static DocumentHistoryEntry ToHistoryEntry(DocumentHistoryRecord entry)
+    {
+        return new DocumentHistoryEntry(
+            entry.Id,
+            entry.Type,
+            entry.VersionNumber,
+            entry.User,
+            entry.Details,
+            entry.OccurredAtUtc);
+    }
+}
+
+public sealed class CatalogStore
+{
+    public List<DocumentRecord> Documents { get; set; } = [];
+}
+
+public sealed class DocumentRecord
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int CurrentVersionNumber { get; set; }
+    public bool IsDeleted { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+    public DateTime? DeletedAtUtc { get; set; }
+    public List<DocumentVersionRecord> Versions { get; set; } = [];
+    public List<DocumentHistoryRecord> History { get; set; } = [];
+}
+
+public sealed class DocumentVersionRecord
+{
+    public int VersionNumber { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string RelativePath { get; set; } = string.Empty;
+    public long SizeInBytes { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+}
+
+public sealed class DocumentHistoryRecord
+{
+    public Guid Id { get; set; }
+    public string Type { get; set; } = string.Empty;
+    public int? VersionNumber { get; set; }
+    public string User { get; set; } = string.Empty;
+    public string Details { get; set; } = string.Empty;
+    public DateTime OccurredAtUtc { get; set; }
+}
+
+public sealed record DocumentSummary(
+    Guid Id,
+    string Name,
+    int CurrentVersionNumber,
+    bool IsDeleted,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+public sealed record DocumentDetails(
+    Guid Id,
+    string Name,
+    int CurrentVersionNumber,
+    bool IsDeleted,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc,
+    IReadOnlyCollection<DocumentVersionDetails> Versions,
+    IReadOnlyCollection<DocumentHistoryEntry> History);
+
+public sealed record DocumentVersionDetails(
+    int VersionNumber,
+    string FileName,
+    long SizeInBytes,
+    string Source,
+    string CreatedBy,
+    DateTime CreatedAtUtc);
+
+public sealed record DocumentHistoryEntry(
+    Guid Id,
+    string Type,
+    int? VersionNumber,
+    string User,
+    string Details,
+    DateTime OccurredAtUtc);
+
+public sealed record AircraftDocumentSummary(
+    string AircraftName,
+    Guid DocumentId,
+    string FileName,
+    string FileType,
+    string DocumentType);
+
+public static class SampleOfficeDocumentFactory
+{
+    public static byte[] CreateDocx(string title, params string[] lines)
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            AddEntry(archive, "[Content_Types].xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/><Override PartName=\"/docProps/core.xml\" ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/><Override PartName=\"/docProps/app.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.extended-properties+xml\"/></Types>");
+            AddEntry(archive, "_rels/.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/><Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" Target=\"docProps/core.xml\"/><Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties\" Target=\"docProps/app.xml\"/></Relationships>");
+            AddEntry(archive, "docProps/core.xml", $"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:dcterms=\"http://purl.org/dc/terms/\" xmlns:dcmitype=\"http://purl.org/dc/dcmitype/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><dc:title>{EscapeXml(title)}</dc:title><dc:creator>GitHub Copilot</dc:creator><cp:lastModifiedBy>GitHub Copilot</cp:lastModifiedBy><dcterms:created xsi:type=\"dcterms:W3CDTF\">{DateTime.UtcNow:O}</dcterms:created><dcterms:modified xsi:type=\"dcterms:W3CDTF\">{DateTime.UtcNow:O}</dcterms:modified></cp:coreProperties>");
+            AddEntry(archive, "docProps/app.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\"><Application>Microsoft Office Word</Application></Properties>");
+            AddEntry(archive, "word/document.xml", BuildDocxDocumentXml(title, lines));
+        }
+
+        return stream.ToArray();
+    }
+
+    public static byte[] CreateXlsx(string sheetName, IReadOnlyCollection<(string Aircraft, string Value)> rows)
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            AddEntry(archive, "[Content_Types].xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/><Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/><Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/><Override PartName=\"/docProps/core.xml\" ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/><Override PartName=\"/docProps/app.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.extended-properties+xml\"/></Types>");
+            AddEntry(archive, "_rels/.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/><Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" Target=\"docProps/core.xml\"/><Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties\" Target=\"docProps/app.xml\"/></Relationships>");
+            AddEntry(archive, "docProps/core.xml", $"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:dcterms=\"http://purl.org/dc/terms/\" xmlns:dcmitype=\"http://purl.org/dc/dcmitype/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><dc:title>{EscapeXml(sheetName)}</dc:title><dc:creator>GitHub Copilot</dc:creator><cp:lastModifiedBy>GitHub Copilot</cp:lastModifiedBy><dcterms:created xsi:type=\"dcterms:W3CDTF\">{DateTime.UtcNow:O}</dcterms:created><dcterms:modified xsi:type=\"dcterms:W3CDTF\">{DateTime.UtcNow:O}</dcterms:modified></cp:coreProperties>");
+            AddEntry(archive, "docProps/app.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\"><Application>Microsoft Excel</Application></Properties>");
+            AddEntry(archive, "xl/workbook.xml", $"<?xml version=\"1.0\" encoding=\"UTF-8\"?><workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"{EscapeXml(sheetName)}\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
+            AddEntry(archive, "xl/_rels/workbook.xml.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/><Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/></Relationships>");
+            AddEntry(archive, "xl/styles.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><fonts count=\"1\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts><fills count=\"1\"><fill><patternFill patternType=\"none\"/></fill></fills><borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs><cellXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/></cellXfs><cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles></styleSheet>");
+            AddEntry(archive, "xl/worksheets/sheet1.xml", BuildWorksheetXml(rows));
+        }
+
+        return stream.ToArray();
+    }
+
+    private static string BuildDocxDocumentXml(string title, params string[] lines)
+    {
+        var paragraphs = new List<string>
+        {
+            $"<w:p><w:r><w:t>{EscapeXml(title)}</w:t></w:r></w:p>"
+        };
+
+        paragraphs.AddRange(lines.Select(line => $"<w:p><w:r><w:t xml:space=\"preserve\">{EscapeXml(line)}</w:t></w:r></w:p>"));
+
+        return $"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:document xmlns:wpc=\"http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas\" xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\" xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:wp14=\"http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing\" xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\" xmlns:w10=\"urn:schemas-microsoft-com:office:word\" xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" xmlns:w14=\"http://schemas.microsoft.com/office/word/2010/wordml\" xmlns:wpg=\"http://schemas.microsoft.com/office/word/2010/wordprocessingGroup\" xmlns:wpi=\"http://schemas.microsoft.com/office/word/2010/wordprocessingInk\" xmlns:wne=\"http://schemas.microsoft.com/office/word/2006/wordml\" xmlns:wps=\"http://schemas.microsoft.com/office/word/2010/wordprocessingShape\" mc:Ignorable=\"w14 wp14\"><w:body>{string.Concat(paragraphs)}<w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/><w:pgMar w:top=\"1440\" w:right=\"1440\" w:bottom=\"1440\" w:left=\"1440\" w:header=\"708\" w:footer=\"708\" w:gutter=\"0\"/></w:sectPr></w:body></w:document>";
+    }
+
+    private static string BuildWorksheetXml(IReadOnlyCollection<(string Aircraft, string Value)> rows)
+    {
+        var cells = new List<string>
+        {
+            "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>Aeronave</t></is></c><c r=\"B1\" t=\"inlineStr\"><is><t>Valor</t></is></c></row>"
+        };
+
+        var rowNumber = 2;
+        foreach (var row in rows)
+        {
+            cells.Add($"<row r=\"{rowNumber}\"><c r=\"A{rowNumber}\" t=\"inlineStr\"><is><t>{EscapeXml(row.Aircraft)}</t></is></c><c r=\"B{rowNumber}\" t=\"inlineStr\"><is><t>{EscapeXml(row.Value)}</t></is></c></row>");
+            rowNumber++;
+        }
+
+        return $"<?xml version=\"1.0\" encoding=\"UTF-8\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>{string.Concat(cells)}</sheetData></worksheet>";
+    }
+
+    private static void AddEntry(ZipArchive archive, string path, string content)
+    {
+        var entry = archive.CreateEntry(path, CompressionLevel.NoCompression);
+        using var writer = new StreamWriter(entry.Open());
+        writer.Write(content);
+    }
+
+    private static string EscapeXml(string value)
+    {
+        return System.Security.SecurityElement.Escape(value) ?? string.Empty;
+    }
+}
