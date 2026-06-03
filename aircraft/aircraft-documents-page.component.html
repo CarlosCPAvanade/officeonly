@@ -1,0 +1,91 @@
+<section class="aircraft-page">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">ONLYOFFICE Aircraft Desk</p>
+      <h1>Documentos por aeronave</h1>
+      <p class="summary">
+        Selecciona un avion en el grid y abre su fichero asociado. Si el documento es Word se abrira en texto; si es Excel, en hoja de calculo. El guardado queda habilitado desde la misma vista.
+      </p>
+    </div>
+
+    <div class="hero-card">
+      <span class="hero-label">Servidor</span>
+      <strong>{{ documentServerUrl }}</strong>
+      <span class="hero-label">Backend</span>
+      <strong>{{ apiBaseUrl }}</strong>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <section class="panel catalog-panel">
+      <div class="panel-header">
+        <h2>Grid de aeronaves</h2>
+        <span class="count" *ngIf="!isGridLoading">{{ aircraftRows.length }} registros</span>
+      </div>
+
+      <div class="grid-state" *ngIf="isGridLoading">Cargando aeronaves...</div>
+
+      <table class="aircraft-grid" *ngIf="!isGridLoading">
+        <thead>
+          <tr>
+            <th>Aeronave</th>
+            <th>Fichero</th>
+            <th>Tipo</th>
+            <th class="action-column">Abrir</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of aircraftRows; trackBy: trackByDocumentId" [class.selected]="row.documentId === selectedRow?.documentId">
+            <td>{{ row.aircraftName }}</td>
+            <td>{{ row.fileName }}</td>
+            <td>
+              <span class="file-badge" [class.spreadsheet]="row.documentType === 'cell'">
+                {{ row.documentType === 'cell' ? 'Excel' : 'Word' }}
+              </span>
+            </td>
+            <td class="action-column">
+              <button type="button" class="icon-button" (click)="openDocument(row)" [attr.aria-label]="'Abrir ' + row.fileName">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zm0 0v6h6M9 14h6M9 18h6M9 10h2" />
+                </svg>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel editor-panel">
+      <div class="panel-header">
+        <div>
+          <h2>{{ selectedRow?.aircraftName ?? 'Sin seleccion' }}</h2>
+          <p class="selected-meta" *ngIf="selectedRow">
+            {{ selectedRow.fileName }} · {{ selectedRow.documentType === 'cell' ? 'Editor Excel' : 'Editor Word' }}
+          </p>
+        </div>
+
+        <button type="button" class="save-button" (click)="saveSelectedDocument()" [disabled]="!selectedRow || !editorReady || isSaving">
+          {{ isSaving ? 'Guardando...' : 'Guardar' }}
+        </button>
+      </div>
+
+      <p class="status-message" *ngIf="statusMessage && !errorMessage">{{ statusMessage }}</p>
+      <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+      <div class="editor-state" *ngIf="isEditorLoading">Preparando editor...</div>
+
+      <document-editor
+        *ngIf="editorConfig && !isEditorLoading && selectedRow"
+        [id]="'aircraftEditor-' + selectedRow.documentId"
+        [documentServerUrl]="documentServerUrl"
+        [config]="editorConfig"
+        width="100%"
+        height="720px"
+        [events_onDocumentStateChange]="onDocumentStateChange"
+        [events_onDocumentReady]="onDocumentReady"
+        [events_onError]="onEditorError"
+        [onLoadComponentError]="onLoadComponentError">
+      </document-editor>
+    </section>
+  </div>
+</section>
