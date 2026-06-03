@@ -1,0 +1,320 @@
+{
+  "documents": [
+    {
+      "id": "ed068208-30f4-4c2b-a03a-3efb0c556863",
+      "name": "Cursos[4631].docx",
+      "currentVersionNumber": 1,
+      "isDeleted": false,
+      "createdAtUtc": "2026-05-10T19:18:21.259976Z",
+      "updatedAtUtc": "2026-05-10T19:18:21.259976Z",
+      "deletedAtUtc": null,
+      "versions": [
+        {
+          "versionNumber": 1,
+          "fileName": "Cursos[4631].docx",
+          "relativePath": "Documents\\ed068208-30f4-4c2b-a03a-3efb0c556863\\Versions\\v1.docx",
+          "sizeInBytes": 246985,
+          "createdAtUtc": "2026-05-10T19:18:21.259976Z",
+          "createdBy": "angular-ui",
+          "source": "upload"
+        }
+      ],
+      "history": [
+        {
+          "id": "9d77d700-e4f9-4efe-b742-cde4e47c7487",
+          "type": "created",
+          "versionNumber": 1,
+          "user": "angular-ui",
+          "details": "Documento creado desde un archivo subido.",
+          "occurredAtUtc": "2026-05-10T19:18:21.259976Z"
+        }
+      ]
+    },
+    {
+      "id": "5cd8ce0c-f695-4c14-911b-d41cc1c823e4",
+      "name": "Cursos[4631].docx",
+      "currentVersionNumber": 3,
+      "isDeleted": false,
+      "createdAtUtc": "2026-05-10T19:22:45.7597171Z",
+      "updatedAtUtc": "2026-05-10T19:23:33.623157Z",
+      "deletedAtUtc": null,
+      "versions": [
+        {
+          "versionNumber": 1,
+          "fileName": "Cursos[4631].docx",
+          "relativePath": "Documents\\5cd8ce0c-f695-4c14-911b-d41cc1c823e4\\Versions\\v1.docx",
+          "sizeInBytes": 246985,
+          "createdAtUtc": "2026-05-10T19:22:45.7597171Z",
+          "createdBy": "angular-ui",
+          "source": "upload"
+        },
+        {
+          "versionNumber": 2,
+          "fileName": "Cursos[4631].docx",
+          "relativePath": "Documents\\5cd8ce0c-f695-4c14-911b-d41cc1c823e4\\Versions\\v2.docx",
+          "sizeInBytes": 246985,
+          "createdAtUtc": "2026-05-10T19:23:23.1565585Z",
+          "createdBy": "angular-ui",
+          "source": "upload"
+        },
+        {
+          "versionNumber": 3,
+          "fileName": "Cursos[4631].docx",
+          "relativePath": "Documents\\5cd8ce0c-f695-4c14-911b-d41cc1c823e4\\Versions\\v3.docx",
+          "sizeInBytes": 246985,
+          "createdAtUtc": "2026-05-10T19:23:33.623157Z",
+          "createdBy": "angular-ui",
+          "source": "upload"
+        }
+      ],
+      "history": [
+        {
+          "id": "768957cc-6c0e-4157-be59-809ca4b27e4b",
+          "type": "created",
+          "versionNumber": 1,
+          "user": "angular-ui",
+          "details": "Documento creado desde un archivo subido.",
+          "occurredAtUtc": "2026-05-10T19:22:45.7597171Z"
+        },
+        {
+          "id": "59465273-c4a2-4dba-ba14-40aa490e0cd9",
+          "type": "version-created",
+          "versionNumber": 2,
+          "user": "angular-ui",
+          "details": "Se cre\u00F3 la versi\u00F3n 2 desde upload.",
+          "occurredAtUtc": "2026-05-10T19:23:23.1565585Z"
+        },
+        {
+          "id": "ae90939e-2218-47a9-a771-fe4006ca5010",
+          "type": "version-created",
+          "versionNumber": 3,
+          "user": "angular-ui",
+          "details": "Se cre\u00F3 la versi\u00F3n 3 desde upload.",
+          "occurredAtUtc": "2026-05-10T19:23:33.623157Z"
+        }
+      ]
+    },
+    {
+      "id": "671b9173-6186-4691-99df-98252fc6b22d",
+      "name": "Learning Agreement Munde (1) (1).docx",
+      "currentVersionNumber": 3,
+      "isDeleted": false,
+      "createdAtUtc": "2026-05-10T19:24:07.7016Z",
+      "updatedAtUtc": "2026-05-12T07:45:00.4084588Z",
+      "deletedAtUtc": null,
+      "versions": [
+        {
+          "versionNumber": 1,
+          "fileName": "Exploraci\u00F3n de la plataforma de identidad de Microsoft.docx",
+          "relativePath": "Documents\\671b9173-6186-4691-99df-98252fc6b22d\\Versions\\v1.docx",
+          "sizeInBytes": 187604,
+          "createdAtUtc": "2026-05-10T19:24:07.7016Z",
+          "createdBy": "angular-ui",
+          "source": "upload"
+        },
+        {
+          "versionNumber": 2,
+          "fileName": "RENUNCIA_Reconocimiento m\u00E9dico1.docx",
+          "relativePath": "Documents\\671b9173-6186-4691-99df-98252fc6b22d\\Versions\\v2.docx",
+          "sizeInBytes": 55078,
+          "createdAtUtc": "2026-05-10T19:24:24.9896157Z",
+          "createdBy": "angular-ui",
+          "source": "upload"
+        },
+        {
+          "versionNumber": 3,
+          "fileName": "Learning Agreement Munde (1) (1).docx",
+          "relativePath": "Documents/671b9173-6186-4691-99df-98252fc6b22d/Versions/v3.docx",
+          "sizeInBytes": 45131,
+          "createdAtUtc": "2026-05-12T07:43:42.3731139Z",
+          "createdBy": "angular-ui",
+          "source": "upload"
+        }
+      ],
+      "history": [
+        {
+          "id": "584756fd-3424-4883-ac3e-b8f7d993d4c9",
+          "type": "created",
+          "versionNumber": 1,
+          "user": "angular-ui",
+          "details": "Documento creado desde un archivo subido.",
+          "occurredAtUtc": "2026-05-10T19:24:07.7016Z"
+        },
+        {
+          "id": "0ba7bdc1-4d6b-4771-a226-9afcc9b2c7d1",
+          "type": "version-created",
+          "versionNumber": 2,
+          "user": "angular-ui",
+          "details": "Se cre\u00F3 la versi\u00F3n 2 desde upload.",
+          "occurredAtUtc": "2026-05-10T19:24:24.9896157Z"
+        },
+        {
+          "id": "09c14988-409f-4401-b357-b2b10f631460",
+          "type": "version-created",
+          "versionNumber": 3,
+          "user": "angular-ui",
+          "details": "Se cre\u00F3 la versi\u00F3n 3 desde upload.",
+          "occurredAtUtc": "2026-05-12T07:43:42.3731139Z"
+        },
+        {
+          "id": "16ce8f6e-180a-4de5-9c59-183b26c48f6b",
+          "type": "save-as",
+          "versionNumber": 3,
+          "user": "angular-ui",
+          "details": "Se genero una copia como Learning Agreement Munde (1) (1)-copia.docx.",
+          "occurredAtUtc": "2026-05-12T07:45:00.4084584Z"
+        }
+      ]
+    },
+    {
+      "id": "acaa150c-6906-490a-95d2-5c8cf5e1984d",
+      "name": "Learning Agreement Munde (1) (1)-copia.docx",
+      "currentVersionNumber": 1,
+      "isDeleted": false,
+      "createdAtUtc": "2026-05-12T07:45:00.3558318Z",
+      "updatedAtUtc": "2026-05-12T07:45:00.3558318Z",
+      "deletedAtUtc": null,
+      "versions": [
+        {
+          "versionNumber": 1,
+          "fileName": "Learning Agreement Munde (1) (1)-copia.docx",
+          "relativePath": "Documents/acaa150c-6906-490a-95d2-5c8cf5e1984d/Versions/v1.docx",
+          "sizeInBytes": 45131,
+          "createdAtUtc": "2026-05-12T07:45:00.3558318Z",
+          "createdBy": "angular-ui",
+          "source": "save-as"
+        }
+      ],
+      "history": [
+        {
+          "id": "c7e1ba1c-4f79-40a8-ab81-941ff789a919",
+          "type": "created",
+          "versionNumber": 1,
+          "user": "angular-ui",
+          "details": "Documento creado con Guardar como.",
+          "occurredAtUtc": "2026-05-12T07:45:00.3558318Z"
+        }
+      ]
+    },
+    {
+      "id": "edd0f446-a263-4e13-bf8f-2da9644f0798",
+      "name": "prueba-fallback.docx",
+      "currentVersionNumber": 1,
+      "isDeleted": false,
+      "createdAtUtc": "2026-06-01T05:21:37.1590071Z",
+      "updatedAtUtc": "2026-06-01T05:21:37.1590071Z",
+      "deletedAtUtc": null,
+      "versions": [
+        {
+          "versionNumber": 1,
+          "fileName": "prueba-fallback.docx",
+          "relativePath": "Documents\\edd0f446-a263-4e13-bf8f-2da9644f0798\\Versions\\v1.docx",
+          "sizeInBytes": 246985,
+          "createdAtUtc": "2026-06-01T05:21:37.1590071Z",
+          "createdBy": "copilot",
+          "source": "seed"
+        }
+      ],
+      "history": [
+        {
+          "id": "678c5fb4-05d1-4fe0-8c4b-c32efcc4222d",
+          "type": "created",
+          "versionNumber": 1,
+          "user": "copilot",
+          "details": "Documento inicializado desde demo.docx.",
+          "occurredAtUtc": "2026-06-01T05:21:37.1590071Z"
+        }
+      ]
+    },
+    {
+      "id": "aab58c8d-b08d-494c-9a4e-a83569ea710f",
+      "name": "airbus-a320-manual.docx",
+      "currentVersionNumber": 1,
+      "isDeleted": false,
+      "createdAtUtc": "2026-06-02T05:17:14.6770171Z",
+      "updatedAtUtc": "2026-06-02T05:17:14.6770171Z",
+      "deletedAtUtc": null,
+      "versions": [
+        {
+          "versionNumber": 1,
+          "fileName": "airbus-a320-manual.docx",
+          "relativePath": "Documents\\aab58c8d-b08d-494c-9a4e-a83569ea710f\\Versions\\v1.docx",
+          "sizeInBytes": 4422,
+          "createdAtUtc": "2026-06-02T05:17:14.6770171Z",
+          "createdBy": "aircraft-samples",
+          "source": "upload"
+        }
+      ],
+      "history": [
+        {
+          "id": "a3353ea7-3a66-4381-8bf4-a6eb23acc8c4",
+          "type": "created",
+          "versionNumber": 1,
+          "user": "aircraft-samples",
+          "details": "Documento creado desde un archivo subido.",
+          "occurredAtUtc": "2026-06-02T05:17:14.6770171Z"
+        }
+      ]
+    },
+    {
+      "id": "c2ee7a7f-f954-40eb-951b-bb3699dc08ce",
+      "name": "boeing-737-checklist.xlsx",
+      "currentVersionNumber": 1,
+      "isDeleted": false,
+      "createdAtUtc": "2026-06-02T05:17:14.7393645Z",
+      "updatedAtUtc": "2026-06-02T05:17:14.7393645Z",
+      "deletedAtUtc": null,
+      "versions": [
+        {
+          "versionNumber": 1,
+          "fileName": "boeing-737-checklist.xlsx",
+          "relativePath": "Documents\\c2ee7a7f-f954-40eb-951b-bb3699dc08ce\\Versions\\v1.xlsx",
+          "sizeInBytes": 5286,
+          "createdAtUtc": "2026-06-02T05:17:14.7393645Z",
+          "createdBy": "aircraft-samples",
+          "source": "upload"
+        }
+      ],
+      "history": [
+        {
+          "id": "a31dbde9-7707-42c7-9917-deec9db4a5eb",
+          "type": "created",
+          "versionNumber": 1,
+          "user": "aircraft-samples",
+          "details": "Documento creado desde un archivo subido.",
+          "occurredAtUtc": "2026-06-02T05:17:14.7393645Z"
+        }
+      ]
+    },
+    {
+      "id": "064e82b8-0ab4-469a-ade2-35bfcbe532cc",
+      "name": "cessna-172-parte.docx",
+      "currentVersionNumber": 1,
+      "isDeleted": false,
+      "createdAtUtc": "2026-06-02T05:17:14.7854935Z",
+      "updatedAtUtc": "2026-06-02T05:17:14.7854935Z",
+      "deletedAtUtc": null,
+      "versions": [
+        {
+          "versionNumber": 1,
+          "fileName": "cessna-172-parte.docx",
+          "relativePath": "Documents\\064e82b8-0ab4-469a-ade2-35bfcbe532cc\\Versions\\v1.docx",
+          "sizeInBytes": 4423,
+          "createdAtUtc": "2026-06-02T05:17:14.7854935Z",
+          "createdBy": "aircraft-samples",
+          "source": "upload"
+        }
+      ],
+      "history": [
+        {
+          "id": "61a1d9d6-d7c7-453f-8978-8b46d274914b",
+          "type": "created",
+          "versionNumber": 1,
+          "user": "aircraft-samples",
+          "details": "Documento creado desde un archivo subido.",
+          "occurredAtUtc": "2026-06-02T05:17:14.7854935Z"
+        }
+      ]
+    }
+  ]
+}
