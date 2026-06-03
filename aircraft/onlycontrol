@@ -1,0 +1,109 @@
+using Microsoft.AspNetCore.Mvc;
+
+[ApiController]
+[Route("api/v1/documents")]
+public class DocumentsController : ControllerBase
+{
+    private static readonly List<AircraftDoc> Docs =
+    [
+        new("1", "Airbus A320", "airbus-a320-manual.docx", "docx", "word"),
+        new("2", "Boeing 737", "boeing-737-checklist.xlsx", "xlsx", "cell"),
+        new("3", "Cessna 172", "cessna-172-parte.docx", "docx", "word")
+    ];
+
+    [HttpGet("aircraft-samples")]
+    public IActionResult GetAircraftSamples() => Ok(Docs);
+
+    [HttpGet("file/{id}")]
+    public IActionResult GetFile(string id)
+    {
+        var doc = Docs.FirstOrDefault(x => x.Id == id);
+        if (doc is null) return NotFound();
+
+        var path = Path.Combine("App_Data", doc.FileName);
+        if (!System.IO.File.Exists(path)) return NotFound();
+
+        var bytes = System.IO.File.ReadAllBytes(path);
+        var contentType = doc.FileType switch
+        {
+            "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            _ => "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        };
+
+        return File(bytes, contentType, doc.FileName);
+    }
+}
+
+[ApiController]
+[Route("api/v1/onlyoffice")]
+public class OnlyOfficeController : ControllerBase
+{
+    private readonly IConfiguration _config;
+
+    public OnlyOfficeController(IConfiguration config)
+    {
+        _config = config;
+    }
+
+    [HttpGet("config/{id}")]
+    public IActionResult GetConfig(string id)
+    {
+        var samples = new[]
+        {
+            new { Id = "1", Name = "airbus-a320-manual.docx", FileType = "docx", DocumentType = "word" },
+            new { Id = "2", Name = "boeing-737-checklist.xlsx", FileType = "xlsx", DocumentType = "cell" },
+            new { Id = "3", Name = "cessna-172-parte.docx", FileType = "docx", DocumentType = "word" }
+        };
+
+        var doc = samples.FirstOrDefault(x => x.Id == id);
+        if (doc is null) return NotFound();
+
+        var backendBaseUrl = _config["OnlyOffice:BackendPublicBaseUrl"] ?? "http://localhost:5033";
+        var onlyoffice = _config["OnlyOffice:DocumentServerInternalUrl"] ?? "http://localhost:8083";
+
+        return Ok(new
+        {
+            document = new
+            {
+                fileType = doc.FileType,
+                key = $"doc-{id}-v1",
+                title = doc.Name,
+                url = $"{backendBaseUrl}/api/v1/onlyoffice/file/{id}",
+                permissions = new
+                {
+                    edit = true,
+                    download = true,
+                    copy = true,
+                    print = true,
+                    review = true
+                }
+            },
+            documentType = doc.DocumentType,
+            editorConfig = new
+            {
+                mode = "edit",
+                createUrl = "/aircraft-documents",
+                callbackUrl = $"{backendBaseUrl}/api/v1/onlyoffice/callback/{id}",
+                customization = new
+                {
+                    autosave = true,
+                    forcesave = true
+                },
+                user = new
+                {
+                    id = "1",
+                    name = "Administrador"
+                }
+            },
+            documentServerUrl = onlyoffice
+        });
+    }
+
+    [HttpPost("callback/{id}")]
+    public IActionResult Callback(string id, [FromBody] object payload)
+    {
+        return Ok(new { error = 0 });
+    }
+}
+
+public record AircraftDoc(string Id, string AircraftName, string FileName, string FileType, string DocumentType);
